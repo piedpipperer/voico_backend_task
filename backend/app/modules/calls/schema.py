@@ -21,6 +21,23 @@ class CallLabel(str, Enum):
     other = "Other"
 
 
+class CallSortBy(str, Enum):
+    phone_number = "phone_number"
+    caller_name = "caller_name"
+    status = "status"
+    label = "label"
+    duration_seconds = "duration_seconds"
+    started_at = "started_at"
+    ended_at = "ended_at"
+    created_at = "created_at"
+    updated_at = "updated_at"
+
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
 class Call(SQLModel, table=True):
     __tablename__ = "calls"
 

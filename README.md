@@ -125,6 +125,8 @@ On the **backend**, extend `GET /api/calls` to accept additional query parameter
 
 On the **frontend**, add a filter UI that lets users add and remove filters. Each active filter should be visible as a removable chip or tag. Column headers should be clickable to sort ascending/descending (one active sort at a time). All active filters and sort state should be reflected in the API request in real time.
 
+**Soluction:** The backend `GET /api/calls` endpoint was extended to support optional AND-combinable filters for status, partial caller name, partial phone number, exact label, minimum duration, maximum duration, and single-column sorting with ascending or descending order. On the frontend, the calls page was upgraded with a filter bar for those fields, removable chips that reflect every active filter, and sortable table headers that cycle through ascending, descending, and no sort while keeping the current filter and sort state synchronized with the API request in real time.
+
 ---
 
 ### Task 3 — Stale Call Auto-Expiry

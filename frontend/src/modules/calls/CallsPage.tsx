@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Phone } from "lucide-react";
+import { Phone, RefreshCw, Search, X } from "lucide-react";
 import { callsApi } from "@/services/api";
-import type { Call, CallStatus } from "@/types/calls";
+import type { Call, CallLabel, CallSortBy, CallStatus, SortOrder } from "@/types/calls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CallsTable } from "./CallsTable";
@@ -18,24 +18,93 @@ const TABS: { label: string; value: TabValue }[] = [
 ];
 
 const PAGE_SIZE = 20;
+const LABEL_OPTIONS: CallLabel[] = [
+  "Sales inquiry",
+  "Support",
+  "Complaint",
+  "Appointment",
+  "Follow-up",
+  "Other",
+];
+const STATUS_LABELS: Record<CallStatus, string> = {
+  in_progress: "In Progress",
+  success: "Success",
+  failed: "Failed",
+};
+const SORT_LABELS: Record<CallSortBy, string> = {
+  phone_number: "Phone",
+  caller_name: "Caller",
+  status: "Status",
+  label: "Label",
+  duration_seconds: "Duration",
+  started_at: "Started At",
+  ended_at: "Ended At",
+  created_at: "Created At",
+  updated_at: "Updated At",
+};
 
 export function CallsPage() {
   const [activeTab, setActiveTab] = useState<TabValue>("all");
   const [page, setPage] = useState(1);
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
+  const [callerNameFilter, setCallerNameFilter] = useState("");
+  const [phoneNumberFilter, setPhoneNumberFilter] = useState("");
+  const [labelFilter, setLabelFilter] = useState<CallLabel | "">("");
+  const [minDurationFilter, setMinDurationFilter] = useState("");
+  const [maxDurationFilter, setMaxDurationFilter] = useState("");
+  const [sortBy, setSortBy] = useState<CallSortBy | undefined>();
+  const [sortOrder, setSortOrder] = useState<SortOrder | undefined>();
 
   const statusFilter = activeTab === "all" ? undefined : activeTab;
+  const deferredCallerNameFilter = useDeferredValue(callerNameFilter.trim());
+  const deferredPhoneNumberFilter = useDeferredValue(phoneNumberFilter.trim());
+  const minDurationSeconds =
+    minDurationFilter.trim() === "" ? undefined : Number(minDurationFilter);
+  const maxDurationSeconds =
+    maxDurationFilter.trim() === "" ? undefined : Number(maxDurationFilter);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["calls", statusFilter, page, PAGE_SIZE],
+    queryKey: [
+      "calls",
+      statusFilter,
+      deferredCallerNameFilter,
+      deferredPhoneNumberFilter,
+      labelFilter || undefined,
+      minDurationSeconds,
+      maxDurationSeconds,
+      sortBy,
+      sortOrder,
+      page,
+      PAGE_SIZE,
+    ],
     queryFn: () =>
       callsApi.list({
         status: statusFilter,
+        caller_name: deferredCallerNameFilter || undefined,
+        phone_number: deferredPhoneNumberFilter || undefined,
+        label: labelFilter || undefined,
+        min_duration_seconds: Number.isNaN(minDurationSeconds) ? undefined : minDurationSeconds,
+        max_duration_seconds: Number.isNaN(maxDurationSeconds) ? undefined : maxDurationSeconds,
+        sort_by: sortBy,
+        sort_order: sortBy ? sortOrder : undefined,
         page,
         page_size: PAGE_SIZE,
       }),
     refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    activeTab,
+    deferredCallerNameFilter,
+    deferredPhoneNumberFilter,
+    labelFilter,
+    minDurationFilter,
+    maxDurationFilter,
+    sortBy,
+    sortOrder,
+  ]);
 
   useEffect(() => {
     if (!selectedCall || !data) return;
@@ -52,6 +121,102 @@ export function CallsPage() {
     setActiveTab(tab);
     setPage(1);
   }
+
+  function handleSortChange(column: CallSortBy) {
+    if (sortBy !== column) {
+      setSortBy(column);
+      setSortOrder("asc");
+      return;
+    }
+
+    if (sortOrder === "asc") {
+      setSortOrder("desc");
+      return;
+    }
+
+    setSortBy(undefined);
+    setSortOrder(undefined);
+  }
+
+  function clearAllFilters() {
+    setActiveTab("all");
+    setCallerNameFilter("");
+    setPhoneNumberFilter("");
+    setLabelFilter("");
+    setMinDurationFilter("");
+    setMaxDurationFilter("");
+    setSortBy(undefined);
+    setSortOrder(undefined);
+  }
+
+  const activeFilters = [
+    ...(statusFilter
+      ? [
+          {
+            key: "status",
+            label: `Status: ${STATUS_LABELS[statusFilter]}`,
+            onRemove: () => setActiveTab("all"),
+          },
+        ]
+      : []),
+    ...(deferredCallerNameFilter
+      ? [
+          {
+            key: "caller_name",
+            label: `Caller: ${deferredCallerNameFilter}`,
+            onRemove: () => setCallerNameFilter(""),
+          },
+        ]
+      : []),
+    ...(deferredPhoneNumberFilter
+      ? [
+          {
+            key: "phone_number",
+            label: `Phone: ${deferredPhoneNumberFilter}`,
+            onRemove: () => setPhoneNumberFilter(""),
+          },
+        ]
+      : []),
+    ...(labelFilter
+      ? [
+          {
+            key: "label",
+            label: `Label: ${labelFilter}`,
+            onRemove: () => setLabelFilter(""),
+          },
+        ]
+      : []),
+    ...(minDurationFilter
+      ? [
+          {
+            key: "min_duration",
+            label: `Min Duration: ${minDurationFilter}s`,
+            onRemove: () => setMinDurationFilter(""),
+          },
+        ]
+      : []),
+    ...(maxDurationFilter
+      ? [
+          {
+            key: "max_duration",
+            label: `Max Duration: ${maxDurationFilter}s`,
+            onRemove: () => setMaxDurationFilter(""),
+          },
+        ]
+      : []),
+    ...(sortBy && sortOrder
+      ? [
+          {
+            key: "sort",
+            label: `Sort: ${SORT_LABELS[sortBy]} ${sortOrder === "asc" ? "↑" : "↓"}`,
+            onRemove: () => {
+              setSortBy(undefined);
+              setSortOrder(undefined);
+            },
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,22 +277,136 @@ export function CallsPage() {
         )}
 
         <Card className="bg-white">
-          <div className="flex items-center px-6 pt-5 pb-4 border-b border-border">
-            <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => handleTabChange(tab.value)}
-                  className="px-3 py-1.5 rounded-md text-sm font-medium transition-all"
-                  style={
-                    activeTab === tab.value
-                      ? { backgroundColor: "#FDDF5C", color: "#4a3800", boxShadow: "0 1px 3px rgba(0,0,0,0.10)" }
-                      : { color: "var(--muted-foreground)" }
-                  }
-                >
-                  {tab.label}
-                </button>
-              ))}
+          <div className="border-b border-border px-6 pt-5 pb-5">
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => handleTabChange(tab.value)}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium transition-all"
+                      style={
+                        activeTab === tab.value
+                          ? {
+                              backgroundColor: "#FDDF5C",
+                              color: "#4a3800",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.10)",
+                            }
+                          : { color: "var(--muted-foreground)" }
+                      }
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeFilters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Caller Name
+                  </span>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={callerNameFilter}
+                      onChange={(event) => setCallerNameFilter(event.target.value)}
+                      placeholder="Partial caller match"
+                      className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Phone Number
+                  </span>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={phoneNumberFilter}
+                      onChange={(event) => setPhoneNumberFilter(event.target.value)}
+                      placeholder="Partial phone match"
+                      className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Label
+                  </span>
+                  <select
+                    value={labelFilter}
+                    onChange={(event) => setLabelFilter(event.target.value as CallLabel | "")}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                  >
+                    <option value="">Any label</option>
+                    {LABEL_OPTIONS.map((label) => (
+                      <option key={label} value={label}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Min Duration
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={minDurationFilter}
+                    onChange={(event) => setMinDurationFilter(event.target.value)}
+                    placeholder="Seconds"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Max Duration
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={maxDurationFilter}
+                    onChange={(event) => setMaxDurationFilter(event.target.value)}
+                    placeholder="Seconds"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                  />
+                </label>
+              </div>
+
+              {activeFilters.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {activeFilters.map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={filter.onRemove}
+                      className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/70"
+                    >
+                      <span>{filter.label}</span>
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -153,6 +432,9 @@ export function CallsPage() {
               <CallsTable
                 calls={data?.data ?? []}
                 onRowClick={setSelectedCall}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
               />
             )}
           </CardContent>

@@ -1,4 +1,22 @@
 export type CallStatus = "in_progress" | "success" | "failed";
+export type CallLabel =
+  | "Sales inquiry"
+  | "Support"
+  | "Complaint"
+  | "Appointment"
+  | "Follow-up"
+  | "Other";
+export type CallSortBy =
+  | "phone_number"
+  | "caller_name"
+  | "status"
+  | "label"
+  | "duration_seconds"
+  | "started_at"
+  | "ended_at"
+  | "created_at"
+  | "updated_at";
+export type SortOrder = "asc" | "desc";
 
 export interface Call {
   id: string;
@@ -8,7 +26,7 @@ export interface Call {
   status: CallStatus;
   summary: string | null;
   notes: string | null;
-  label: string | null;
+  label: CallLabel | null;
   started_at: string;
   ended_at: string | null;
   created_at: string;
@@ -37,6 +55,13 @@ export interface PaginatedCallsResponse {
 
 export interface CallsQueryParams {
   status?: CallStatus;
+  caller_name?: string;
+  phone_number?: string;
+  label?: CallLabel;
+  min_duration_seconds?: number;
+  max_duration_seconds?: number;
+  sort_by?: CallSortBy;
+  sort_order?: SortOrder;
   page?: number;
   page_size?: number;
 }
