@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import HTTPException
 from fastapi import status as http_status
 
+from app.modules.calls.ai import CallAIEnricher
 from app.modules.calls.repository import CallRepository
 from app.modules.calls.schema import (
     CallCounts,
@@ -15,6 +16,7 @@ from app.modules.calls.schema import (
     PaginatedCallsResponse,
     SortOrder,
     UpdateCallNotesRequest,
+    WebhookCallPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 class CallService:
     def __init__(self, repository: CallRepository) -> None:
         self.repository = repository
+        self.ai_enricher = CallAIEnricher()
 
     async def list_calls(
         self,
@@ -90,5 +93,29 @@ class CallService:
             )
 
         call.notes = payload.notes
+        updated_call = await self.repository.update(call)
+        return CallResponse.model_validate(updated_call, from_attributes=True)
+
+    async def process_webhook_call(self, payload: WebhookCallPayload) -> CallResponse:
+        call = await self.repository.get_by_id(payload.call_id)
+        if call is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND, detail="Call not found"
+            )
+
+        call.status = payload.status
+        call.duration_seconds = payload.duration_seconds
+        call.raw_transcript = payload.raw_transcript
+        call.ended_at = payload.ended_at
+        if payload.status in {CallStatus.success, CallStatus.failed}:
+            call.summary = None
+            call.label = None
+
+            if payload.raw_transcript:
+                enrichment = await self.ai_enricher.enrich_call(payload.raw_transcript)
+                if enrichment is not None:
+                    call.summary = enrichment.summary
+                    call.label = enrichment.label
+
         updated_call = await self.repository.update(call)
         return CallResponse.model_validate(updated_call, from_attributes=True)

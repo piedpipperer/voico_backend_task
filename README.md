@@ -159,6 +159,8 @@ How to test:
 1. **Update the call** — find the call by `call_id`, update its `status`, `duration_seconds`, `raw_transcript`, and `ended_at`, then persist the changes.
 2. **AI enrichment** — if the new status is `success` or `failed` and a `raw_transcript` is provided, call the OpenAI API (`gpt-4o-mini`) to generate a short summary (2–3 sentences) and classify the call into one of the `CallLabel` values. Store both on the call record. If the OpenAI call fails, log the error and continue — `summary` and `label` should remain `null`.
 
+**Solution:** The webhook endpoint was completed so it now looks up the target call by `call_id`, updates `status`, `duration_seconds`, `raw_transcript`, and `ended_at`, and persists the refreshed record through the existing service and repository flow. For completed calls with a transcript, an OpenAI integration was added using `gpt-4o-mini` and structured output parsing to generate a short summary and assign one valid `CallLabel`, then store both values on the call. If the OpenAI request fails or returns no usable parsed result, the error is logged and the webhook still succeeds, leaving `summary` and `label` as `null`.
+
 **How to test:** Once implemented, use the interactive API docs at `http://localhost:8000/docs` (powered by Swagger UI). Steps:
 1. Call `GET /api/calls?status=in_progress` and copy an `id` from the response.
 2. Open `POST /api/webhook/call`, click **Try it out**, and paste a payload like:
