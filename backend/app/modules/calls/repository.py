@@ -1,8 +1,9 @@
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
+from sqlalchemy import update
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -87,6 +88,18 @@ class CallRepository:
         await self.session.flush()
         await self.session.refresh(call)
         return call
+
+    async def expire_stale_in_progress_calls(self, threshold_seconds: int) -> int:
+        now = datetime.utcnow()
+        stale_before = now - timedelta(seconds=threshold_seconds)
+
+        result = await self.session.exec(
+            update(Call)
+            .where(Call.status == CallStatus.in_progress)
+            .where(Call.started_at < stale_before)
+            .values(status=CallStatus.failed, updated_at=now)
+        )
+        return result.rowcount or 0
 
     def _apply_filters(
         self,

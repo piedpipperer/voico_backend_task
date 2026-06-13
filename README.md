@@ -125,7 +125,7 @@ On the **backend**, extend `GET /api/calls` to accept additional query parameter
 
 On the **frontend**, add a filter UI that lets users add and remove filters. Each active filter should be visible as a removable chip or tag. Column headers should be clickable to sort ascending/descending (one active sort at a time). All active filters and sort state should be reflected in the API request in real time.
 
-**Soluction:** The backend `GET /api/calls` endpoint was extended to support optional AND-combinable filters for status, partial caller name, partial phone number, exact label, minimum duration, maximum duration, and single-column sorting with ascending or descending order. On the frontend, the calls page was upgraded with a filter bar for those fields, removable chips that reflect every active filter, and sortable table headers that cycle through ascending, descending, and no sort while keeping the current filter and sort state synchronized with the API request in real time.
+**Solution:** The backend `GET /api/calls` endpoint was extended to support optional AND-combinable filters for status, partial caller name, partial phone number, exact label, minimum duration, maximum duration, and single-column sorting with ascending or descending order. On the frontend, the calls page was upgraded with a filter bar for those fields, removable chips that reflect every active filter, and sortable table headers that cycle through ascending, descending, and no sort while keeping the current filter and sort state synchronized with the API request in real time.
 
 ---
 
@@ -136,6 +136,17 @@ On the **frontend**, add a filter UI that lets users add and remove filters. Eac
 **What to build:** A background job that runs automatically while the server is up. Every 10 minutes it checks for calls that have been `in_progress` for more than 30 minutes and marks them as `failed` in a single batch update. It should log how many calls were expired each run.
 
 The interval (10 min) and the stale threshold (30 min) must be configurable via environment variables — add them to `.env` and `app/core/config.py` so they are easy to adjust for testing without touching the code.
+
+**Solution:** A background expiry loop was added to the backend startup lifecycle so it runs automatically while the API server is up. On each interval it opens a database session, performs a single batch update that changes stale `in_progress` calls to `failed`, commits the change, and logs how many calls were expired in that run. The timing is configurable through environment variables exposed in `.env` and `app/core/config.py`, which makes it easy to shorten the interval and stale threshold when testing locally.
+
+How to test:
+
+1. Open GET /api/calls?status=in_progress in Swagger and find a call whose started_at
+    is already more than 30 seconds in the past.
+2. Wait up to 10 seconds for the next background run.
+3. Call GET /api/calls/{id} for that same call, or refresh the frontend table.
+4. Its status should now be failed.
+
 
 ---
 
