@@ -34,6 +34,7 @@ class Call(SQLModel, table=True):
     duration_seconds: Optional[int] = Field(default=None)
     status: CallStatus = Field(default=CallStatus.in_progress, index=True)
     summary: Optional[str] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
     label: Optional[CallLabel] = Field(default=None)
     started_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -72,12 +73,17 @@ class CallResponse(SQLModel):
     duration_seconds: Optional[int]
     status: CallStatus
     summary: Optional[str]
+    notes: Optional[str]
     label: Optional[CallLabel]
     started_at: datetime
     ended_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
     raw_transcript: Optional[str]
+
+
+class UpdateCallNotesRequest(SQLModel):
+    notes: Optional[str] = None
 
 
 class CallCounts(SQLModel):

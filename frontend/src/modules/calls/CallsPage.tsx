@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, Phone } from "lucide-react";
 import { callsApi } from "@/services/api";
@@ -36,6 +36,17 @@ export function CallsPage() {
       }),
     refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    if (!selectedCall || !data) return;
+
+    const currentCall = data.data.find((call) => call.id === selectedCall.id);
+    if (!currentCall) return;
+
+    if (currentCall.updated_at !== selectedCall.updated_at || currentCall.notes !== selectedCall.notes) {
+      setSelectedCall(currentCall);
+    }
+  }, [data, selectedCall]);
 
   function handleTabChange(tab: TabValue) {
     setActiveTab(tab);
@@ -178,7 +189,11 @@ export function CallsPage() {
         </Card>
       </main>
 
-      <CallDetailDrawer call={selectedCall} onClose={() => setSelectedCall(null)} />
+      <CallDetailDrawer
+        call={selectedCall}
+        onClose={() => setSelectedCall(null)}
+        onCallUpdated={setSelectedCall}
+      />
     </div>
   );
 }

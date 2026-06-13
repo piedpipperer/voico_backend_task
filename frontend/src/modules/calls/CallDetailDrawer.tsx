@@ -1,11 +1,15 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { X, Phone, User, Clock, Calendar, FileText, Sparkles } from "lucide-react";
+import { X, Phone, User, Clock, Calendar, FileText, Sparkles, Pencil, Loader2 } from "lucide-react";
+import { callsApi } from "@/services/api";
 import { StatusBadge } from "./CallsTable";
-import type { Call } from "@/types/calls";
+import type { Call, PaginatedCallsResponse } from "@/types/calls";
 
 interface CallDetailDrawerProps {
   call: Call | null;
   onClose: () => void;
+  onCallUpdated: (call: Call | null) => void;
 }
 
 function DetailRow({
@@ -35,8 +39,86 @@ function formatDuration(seconds: number | null): string {
   return m > 0 ? `${m} min ${s} sec` : `${s} sec`;
 }
 
-export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
+export function CallDetailDrawer({ call, onClose, onCallUpdated }: CallDetailDrawerProps) {
+  const queryClient = useQueryClient();
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsEditingNotes(false);
+    setNotesError(null);
+    setNotesDraft(call?.notes ?? "");
+  }, [call]);
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async (notes: string) =>
+      callsApi.updateNotes(call!.id, { notes: notes.trim() === "" ? null : notes }),
+    onMutate: async (notes) => {
+      if (!call) return { previousQueries: [], previousCall: null };
+
+      setNotesError(null);
+      const nextNotes = notes.trim() === "" ? null : notes;
+      const optimisticCall: Call = {
+        ...call,
+        notes: nextNotes,
+      };
+
+      const previousQueries = queryClient.getQueriesData<PaginatedCallsResponse>({
+        queryKey: ["calls"],
+      });
+
+      queryClient.setQueriesData<PaginatedCallsResponse>({ queryKey: ["calls"] }, (current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          data: current.data.map((existingCall) =>
+            existingCall.id === call.id ? { ...existingCall, notes: nextNotes } : existingCall
+          ),
+        };
+      });
+
+      onCallUpdated(optimisticCall);
+
+      return {
+        previousQueries,
+        previousCall: call,
+      };
+    },
+    onError: (_error, _notes, context) => {
+      setNotesError("Could not save notes. Try again.");
+
+      for (const [queryKey, previousData] of context?.previousQueries ?? []) {
+        queryClient.setQueryData(queryKey, previousData);
+      }
+
+      if (context?.previousCall) {
+        onCallUpdated(context.previousCall);
+        setNotesDraft(context.previousCall.notes ?? "");
+      }
+    },
+    onSuccess: (updatedCall) => {
+      queryClient.setQueriesData<PaginatedCallsResponse>({ queryKey: ["calls"] }, (current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          data: current.data.map((existingCall) =>
+            existingCall.id === updatedCall.id ? updatedCall : existingCall
+          ),
+        };
+      });
+
+      onCallUpdated(updatedCall);
+      setNotesDraft(updatedCall.notes ?? "");
+      setIsEditingNotes(false);
+    },
+  });
+
   if (!call) return null;
+
+  const notesValue = call.notes?.trim() ? call.notes : "Click to add notes";
 
   return (
     <>
@@ -100,6 +182,91 @@ export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
               value={format(new Date(call.ended_at), "PPpp")}
             />
           )}
+
+          <div className="flex items-start gap-3 py-3 border-b border-border">
+            <div className="mt-0.5 text-muted-foreground">
+              <FileText className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">Notes</p>
+                {!isEditingNotes && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotesDraft(call.notes ?? "");
+                      setNotesError(null);
+                      setIsEditingNotes(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              {isEditingNotes ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={notesDraft}
+                    onChange={(event) => setNotesDraft(event.target.value)}
+                    rows={5}
+                    autoFocus
+                    className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-yellow-300 focus:ring-2 focus:ring-yellow-100"
+                    placeholder="Add notes about this call"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    {notesError ? (
+                      <p className="text-xs text-red-600">{notesError}</p>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Free-text notes saved to the call record.
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotesDraft(call.notes ?? "");
+                          setNotesError(null);
+                          setIsEditingNotes(false);
+                        }}
+                        className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        disabled={updateNotesMutation.isPending}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateNotesMutation.mutate(notesDraft)}
+                        className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-[#4a3800] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ backgroundColor: "#FDDF5C" }}
+                        disabled={updateNotesMutation.isPending}
+                      >
+                        {updateNotesMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotesDraft(call.notes ?? "");
+                    setNotesError(null);
+                    setIsEditingNotes(true);
+                  }}
+                  className={`block w-full rounded-lg border border-dashed px-3 py-2 text-left text-sm transition-colors hover:border-border hover:bg-muted/60 ${
+                    call.notes?.trim() ? "border-transparent bg-muted/40 text-foreground" : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {notesValue}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* AI Summary */}

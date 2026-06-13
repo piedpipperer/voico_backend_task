@@ -111,6 +111,8 @@ There are four features to implement. Some tasks require adding new endpoints an
 
 **What to build:** Add a `notes` field to the `Call` model — a nullable free-text field. Create an Alembic migration for it. Add a `PATCH /api/calls/{id}/notes` endpoint that accepts a JSON body `{"notes": "..."}` and persists it. On the frontend, make the notes field editable inline inside the call detail drawer: clicking on it should turn it into a textarea, and saving should call the new endpoint and update the UI immediately.
 
+**Solution:** A nullable `notes` field was added to the backend `Call` model together with an Alembic migration and a new `PATCH /api/calls/{id}/notes` endpoint that updates the record and returns the refreshed call payload. On the frontend, the call detail drawer was extended with an inline notes editor that switches from display mode to a textarea when clicked, saves through the new endpoint, and updates the open drawer and cached calls list immediately so the user sees the change without waiting for a manual refresh.
+
 ---
 
 ### Task 2 — Advanced Filtering & Search

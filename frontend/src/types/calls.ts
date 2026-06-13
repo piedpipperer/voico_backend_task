@@ -7,12 +7,17 @@ export interface Call {
   duration_seconds: number | null;
   status: CallStatus;
   summary: string | null;
+  notes: string | null;
   label: string | null;
   started_at: string;
   ended_at: string | null;
   created_at: string;
   updated_at: string;
   raw_transcript: string | null;
+}
+
+export interface UpdateCallNotesPayload {
+  notes: string | null;
 }
 
 export interface CallCounts {

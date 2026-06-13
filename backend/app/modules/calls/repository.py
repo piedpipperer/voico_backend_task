@@ -1,5 +1,6 @@
 import math
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from sqlmodel import func, select
@@ -50,6 +51,7 @@ class CallRepository:
         return calls, total, total_pages, counts
 
     async def update(self, call: Call) -> Call:
+        call.updated_at = datetime.utcnow()
         self.session.add(call)
         await self.session.flush()
         await self.session.refresh(call)

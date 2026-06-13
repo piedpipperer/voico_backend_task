@@ -10,6 +10,7 @@ from app.modules.calls.schema import (
     CallResponse,
     CallStatus,
     PaginatedCallsResponse,
+    UpdateCallNotesRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,3 +47,14 @@ class CallService:
         if call is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Call not found")
         return CallResponse.model_validate(call, from_attributes=True)
+
+    async def update_call_notes(
+        self, call_id: uuid.UUID, payload: UpdateCallNotesRequest
+    ) -> CallResponse:
+        call = await self.repository.get_by_id(call_id)
+        if call is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Call not found")
+
+        call.notes = payload.notes
+        updated_call = await self.repository.update(call)
+        return CallResponse.model_validate(updated_call, from_attributes=True)
