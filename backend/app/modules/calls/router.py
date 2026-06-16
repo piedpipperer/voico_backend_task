@@ -8,9 +8,13 @@ from app.core.db import async_session
 from app.core.decorators import session_manager
 from app.modules.calls.repository import CallRepository
 from app.modules.calls.schema import (
+    CallLabel,
     CallResponse,
+    CallSortBy,
     CallStatus,
     PaginatedCallsResponse,
+    SortOrder,
+    UpdateCallNotesRequest,
     WebhookCallPayload,
 )
 from app.modules.calls.service import CallService
@@ -35,10 +39,28 @@ async def list_calls(
     session: SessionDep,
     service: Annotated[CallService, Depends(get_call_service)],
     status: Optional[CallStatus] = Query(default=None),
+    caller_name: Optional[str] = Query(default=None),
+    phone_number: Optional[str] = Query(default=None),
+    label: Optional[CallLabel] = Query(default=None),
+    min_duration_seconds: Optional[int] = Query(default=None, ge=0),
+    max_duration_seconds: Optional[int] = Query(default=None, ge=0),
+    sort_by: Optional[CallSortBy] = Query(default=None),
+    sort_order: Optional[SortOrder] = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> PaginatedCallsResponse:
-    return await service.list_calls(status=status, page=page, page_size=page_size)
+    return await service.list_calls(
+        status=status,
+        caller_name=caller_name,
+        phone_number=phone_number,
+        label=label,
+        min_duration_seconds=min_duration_seconds,
+        max_duration_seconds=max_duration_seconds,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/calls/{call_id}", response_model=CallResponse)
@@ -50,10 +72,22 @@ async def get_call(
     return await service.get_call(call_id)
 
 
+@router.patch("/calls/{call_id}/notes", response_model=CallResponse)
+@session_manager
+async def update_call_notes(
+    call_id: uuid.UUID,
+    payload: UpdateCallNotesRequest,
+    session: SessionDep,
+    service: Annotated[CallService, Depends(get_call_service)],
+) -> CallResponse:
+    return await service.update_call_notes(call_id, payload)
+
+
 @router.post("/webhook/call", response_model=CallResponse)
 @session_manager
 async def webhook_call(
     payload: WebhookCallPayload,
     session: SessionDep,
+    service: Annotated[CallService, Depends(get_call_service)],
 ) -> CallResponse:
-    pass
+    return await service.process_webhook_call(payload)

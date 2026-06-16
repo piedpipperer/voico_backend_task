@@ -1,5 +1,10 @@
 import axios from "axios";
-import type { Call, CallsQueryParams, PaginatedCallsResponse } from "@/types/calls";
+import type {
+  Call,
+  CallsQueryParams,
+  PaginatedCallsResponse,
+  UpdateCallNotesPayload,
+} from "@/types/calls";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -18,6 +23,11 @@ export const callsApi = {
 
   getById: async (id: string): Promise<Call> => {
     const { data } = await apiClient.get<Call>(`/calls/${id}`);
+    return data;
+  },
+
+  updateNotes: async (id: string, payload: UpdateCallNotesPayload): Promise<Call> => {
+    const { data } = await apiClient.patch<Call>(`/calls/${id}/notes`, payload);
     return data;
   },
 };

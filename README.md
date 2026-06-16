@@ -111,6 +111,8 @@ There are four features to implement. Some tasks require adding new endpoints an
 
 **What to build:** Add a `notes` field to the `Call` model — a nullable free-text field. Create an Alembic migration for it. Add a `PATCH /api/calls/{id}/notes` endpoint that accepts a JSON body `{"notes": "..."}` and persists it. On the frontend, make the notes field editable inline inside the call detail drawer: clicking on it should turn it into a textarea, and saving should call the new endpoint and update the UI immediately.
 
+**Solution:** A nullable `notes` field was added to the backend `Call` model together with an Alembic migration and a new `PATCH /api/calls/{id}/notes` endpoint that updates the record and returns the refreshed call payload. On the frontend, the call detail drawer was extended with an inline notes editor that switches from display mode to a textarea when clicked, saves through the new endpoint, and updates the open drawer and cached calls list immediately so the user sees the change without waiting for a manual refresh.
+
 ---
 
 ### Task 2 — Advanced Filtering & Search
@@ -123,6 +125,8 @@ On the **backend**, extend `GET /api/calls` to accept additional query parameter
 
 On the **frontend**, add a filter UI that lets users add and remove filters. Each active filter should be visible as a removable chip or tag. Column headers should be clickable to sort ascending/descending (one active sort at a time). All active filters and sort state should be reflected in the API request in real time.
 
+**Solution:** The backend `GET /api/calls` endpoint was extended to support optional AND-combinable filters for status, partial caller name, partial phone number, exact label, minimum duration, maximum duration, and single-column sorting with ascending or descending order. On the frontend, the calls page was upgraded with a filter bar for those fields, removable chips that reflect every active filter, and sortable table headers that cycle through ascending, descending, and no sort while keeping the current filter and sort state synchronized with the API request in real time.
+
 ---
 
 ### Task 3 — Stale Call Auto-Expiry
@@ -132,6 +136,17 @@ On the **frontend**, add a filter UI that lets users add and remove filters. Eac
 **What to build:** A background job that runs automatically while the server is up. Every 10 minutes it checks for calls that have been `in_progress` for more than 30 minutes and marks them as `failed` in a single batch update. It should log how many calls were expired each run.
 
 The interval (10 min) and the stale threshold (30 min) must be configurable via environment variables — add them to `.env` and `app/core/config.py` so they are easy to adjust for testing without touching the code.
+
+**Solution:** A background expiry loop was added to the backend startup lifecycle so it runs automatically while the API server is up. On each interval it opens a database session, performs a single batch update that changes stale `in_progress` calls to `failed`, commits the change, and logs how many calls were expired in that run. The timing is configurable through environment variables exposed in `.env` and `app/core/config.py`, which makes it easy to shorten the interval and stale threshold when testing locally.
+
+How to test:
+
+1. Open GET /api/calls?status=in_progress in Swagger and find a call whose started_at
+    is already more than 30 seconds in the past.
+2. Wait up to 10 seconds for the next background run.
+3. Call GET /api/calls/{id} for that same call, or refresh the frontend table.
+4. Its status should now be failed.
+
 
 ---
 
@@ -143,6 +158,8 @@ The interval (10 min) and the stale threshold (30 min) must be configurable via 
 
 1. **Update the call** — find the call by `call_id`, update its `status`, `duration_seconds`, `raw_transcript`, and `ended_at`, then persist the changes.
 2. **AI enrichment** — if the new status is `success` or `failed` and a `raw_transcript` is provided, call the OpenAI API (`gpt-4o-mini`) to generate a short summary (2–3 sentences) and classify the call into one of the `CallLabel` values. Store both on the call record. If the OpenAI call fails, log the error and continue — `summary` and `label` should remain `null`.
+
+**Solution:** The webhook endpoint was completed so it now looks up the target call by `call_id`, updates `status`, `duration_seconds`, `raw_transcript`, and `ended_at`, and persists the refreshed record through the existing service and repository flow. For completed calls with a transcript, an OpenAI integration was added using `gpt-4o-mini` and structured output parsing to generate a short summary and assign one valid `CallLabel`, then store both values on the call. If the OpenAI request fails or returns no usable parsed result, the error is logged and the webhook still succeeds, leaving `summary` and `label` as `null`.
 
 **How to test:** Once implemented, use the interactive API docs at `http://localhost:8000/docs` (powered by Swagger UI). Steps:
 1. Call `GET /api/calls?status=in_progress` and copy an `id` from the response.
